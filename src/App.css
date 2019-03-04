@@ -1,33 +1,91 @@
-.App {
-  text-align: center;
-}
-
-.App-logo {
-  animation: App-logo-spin infinite 20s linear;
-  height: 40vmin;
-  pointer-events: none;
-}
-
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+body{
   display: flex;
-  flex-direction: column;
+  justify-content: center;
+  height: 100vh;
+}
+.App{
+  margin-top: 70px;
+  border: 1px solid rgba(0,0,0,0.2);
+  padding: 20px;
+  padding-bottom: 50px;
+  box-shadow: 0 0 5px rgba(0,0,0,0.3)
+}
+.wrapper input, .add-button{
+  border: 1px solid rgba(0,0,0,0.2);
+  height: 30px;
+}
+.error{
+  position: absolute;
+  background: transparent;
+  color: rgba(185, 10, 10, 0.9);;
+}
+.add-button{
+  border: 1px solid rgba(0,0,0,0.2);
+  height: 34px;
+  background: #e66d1ce6;
+  color: whitesmoke;
+  outline: none !important;
+}
+.nav-bar .menu{
+  list-style-type: none;
+  padding: 0;
+}
+.nav-bar .menu  .item{
+  margin: 8px;
+  display: inline-block;
+  height: 30px;
+}
+.nav-bar .menu  .item:hover{
+  background: rgba(163, 152, 152, 0.1);
+  /*border-bottom: solid #e66d1ce6;;*/
+}
+
+.nav-bar .menu  .item button{
+  border:none ;
+  height: 30px;
+  cursor: pointer;
+  outline: none !important;
+  background: transparent;
+}
+
+.nav-bar .menu  .item button:active{
+  outline: none 
+}
+
+
+
+.item-wrapper{
+  display: flex;
+  justify-content: space-between;
+  /*border: solid blue;*/
+}
+
+.task, .task-handler{
+  /*border: solid red;*/
+  display: flex;
   align-items: center;
   justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
 }
 
-.App-link {
-  color: #61dafb;
+.task .fa{
+ /* border:  solid black;*/
+  margin-right: 20px;
+  align-items: center;
+  justify-content: center;
+  color: rgba(0,0,0,0.2);
+  cursor: pointer;
 }
-
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.task-handler{
+ /* border: solid red;*/
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 20%;
+}
+.task-handler .fa{
+ /* border:  solid black;*/
+ color: #e66d1ce6;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
