@@ -86,6 +86,16 @@ class App extends Component {
     })
 
   }
+  deleteTask = (id)=>{
+    let tempTask = [...this.state.tasks]
+    let remItemArr = tempTask.filter(item=>tempTask.indexOf(item)!==id);
+    remItemArr.forEach((item,index)=>{
+        item.id=index;
+    })
+    this.setState({
+      tasks: remItemArr
+    })
+  }
   handleStatus = (e)=>{
     this.setState({status: e.target.value})
   }
@@ -102,7 +112,8 @@ class App extends Component {
                     input={this.state.inputEdit} 
                     handleChange={this.handleInput}
                     completeTask={this.completeTask}
-                    selectedTask={this.state.selectedTask}/>
+                    selectedTask={this.state.selectedTask}
+                    deleteItem = {this.deleteTask}/>
 
       </div>
     );
