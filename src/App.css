@@ -8,7 +8,24 @@ body{
   border: 1px solid rgba(0,0,0,0.2);
   padding: 20px;
   padding-bottom: 50px;
-  box-shadow: 0 0 5px rgba(0,0,0,0.3)
+  box-shadow: 0 0 5px rgba(0,0,0,0.3);
+  border-radius: 5px;
+}
+.info{
+  margin-top: 40px;
+  display: flex;
+  justify-content: space-between;
+}
+.info .clear{
+  border: none;
+  outline: none;
+  background: #e66d1ce6;
+  color: white;
+  cursor: pointer;
+}
+.info .clear:hover{
+  background: #5f5148e6;
+  box-shadow: 0 0 5px rgba(247, 91, 30, 1);
 }
 .wrapper input, .add-button{
   border: 1px solid rgba(0,0,0,0.2);
@@ -53,11 +70,16 @@ body{
 }
 
 
-
+.playground{
+ /* border: solid red;*/
+}
 .item-wrapper{
   display: flex;
   justify-content: space-between;
   /*border: solid blue;*/
+}
+.item-wrapper-bg{
+  background: rgba(0,0,0,0.1)
 }
 
 .task, .task-handler{

@@ -1,12 +1,24 @@
-import React from "react";
-
-export default function Test(){
-    return(
-        <div className="task" >
-                    <div className="fa fa-check" >polo</div>
-                    <div className="task-name">pea</div>
-                    <div className="task-name">bingo</div>
-                    <div className="task-name">salomon</div>
-                </div>
-    );
-}
+import React from "react"
+export default class DisplayMessages extends React.Component {
+    constructor(props) {
+      super(props);
+      this.state = {
+        input: '',
+        messages: []
+      }
+    }
+    // add handleChange() and submitMessage() methods here
+   handleChange = ()=>{}
+    render() {
+      return (
+        <div>
+          <h2>Type in a new Message:</h2>
+          { /* render an input, button, and ul here */ }
+          <input />
+          <button>button</button>
+          <ul>polo</ul>
+          { /* change code above this line */ }
+        </div>
+      );
+    }
+  };
