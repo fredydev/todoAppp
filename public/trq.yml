@@ -1,0 +1,262 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Azure DevOps API Gateway + SNS integration '
+
+Parameters:
+  NotificationEmail:
+    Type: String
+    Default: sagessegina@gmail.com
+    Description: Email address for SNS notifications
+  CustomAuthorizer:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Enable custom authorizer
+  APIKey:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Enable API key
+
+Conditions:
+  ShouldEnableAuthorizer: !Equals [!Ref CustomAuthorizer, "true"]
+  ShouldEnableAPIKey: !Equals [!Ref APIKey, "true"]
+
+Resources:
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: topic-azure-devops
+      DisplayName: Azure DevOps Topic
+
+  SNSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SNSTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+   # 1. Fonction Lambda pour le Custom Authorizer 
+  AuthorizerLambda:
+    Condition: ShouldEnableAuthorizer
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-Authorizer"
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import logging
+          import base64
+          
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          
+          def lambda_handler(event, context):
+              # Log l'événement complet
+              logger.info("Event reçu dans l'Authorizer: " + json.dumps(event))
+              
+              # Exemple de validation basique
+              auth_header = event['headers'].get('Authorization')
+              method_arn = event['methodArn']
+              try:
+                encoded = auth_header.split(' ')[1]
+                decoded = base64.b64decode(encoded).decode('utf-8')
+                username, password = decoded.split(':')
+                if username == "admin" and password == "admin":
+                  return _allow(method_arn,username)
+                else:
+                  return _deny(method_arn)
+              except Exception as e:
+                print(f"Erreur validation basique: {e}")
+                return _deny(method_arn)
+                 
+          def _allow(method_arn,username):
+            return {
+                "principalId": username,
+                "policyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Action": "execute-api:Invoke",
+                        "Effect": "Allow",
+                        "Resource": method_arn
+                    }]
+                }
+            }
+
+          def _deny(method_arn):
+            return {
+                "principalId": "user123",
+                "policyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Action": "execute-api:Invoke",
+                        "Effect": "Deny",
+                        "Resource": method_arn
+                    }]
+                }
+            }
+
+  # 2. Rôle IAM pour la Lambda
+  LambdaExecutionRole:
+    Condition: ShouldEnableAuthorizer
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: [lambda.amazonaws.com] }
+            Action: ["sts:AssumeRole"]
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+  # 3. Custom Authorizer dans API Gateway
+  ApiAuthorizer:
+    Condition: ShouldEnableAuthorizer
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      Name: CustomTokenAuthorizer
+      RestApiId: !Ref RestApi
+      Type: REQUEST
+      IdentitySource: method.request.header.Authorization
+      AuthorizerUri: !Sub 
+        - "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthorizerLambda.Arn}/invocations"
+        - {}
+
+
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: 'azure-devops-integration'
+      Description: 'API Gateway for proxying messages to SNS'
+
+  AuthorizerPermission:
+    Condition: ShouldEnableAuthorizer
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt AuthorizerLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*"
+
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: sendmessage
+      RestApiId: !Ref RestApi
+  ApiKey:
+    Condition: ShouldEnableAPIKey
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: !Sub "${AWS::StackName}-APIKey"
+      StageKeys:
+        - RestApiId: !Ref RestApi
+          StageName: prod
+      Enabled: true
+  UsagePlan: 
+    Condition: ShouldEnableAPIKey
+    Type: AWS::ApiGateway::UsagePlan
+    Properties:
+      ApiStages:
+        - ApiId: !Ref RestApi
+          Stage: prod
+      Description: "Usage plan for Azure DevOps"
+      Quota:
+        Limit: 10000
+        Period: MONTH
+      Throttle:
+        BurstLimit: 100
+        RateLimit: 50
+
+  UsagePlanKey:
+    Condition: ShouldEnableAPIKey
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref ApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref UsagePlan
+
+  ApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: POST
+      ResourceId: !Ref ApiResource
+      RestApiId: !Ref RestApi
+      ApiKeyRequired: !If [ShouldEnableAPIKey, true, false]
+      AuthorizationType: !If [ShouldEnableAuthorizer, "CUSTOM", "NONE"]
+      AuthorizerId: !If [ShouldEnableAuthorizer, !Ref ApiAuthorizer, !Ref "AWS::NoValue"]
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:sns:action/Publish'
+          - {}
+        Credentials: !GetAtt ApiGatewayRole.Arn
+        PassthroughBehavior: NEVER
+        RequestParameters:
+          'integration.request.header.Content-Type': "'application/x-www-form-urlencoded'"
+        RequestTemplates:
+          application/json: !Sub "Action=Publish&TopicArn=$util.urlEncode('${SNSTopic}')&Message=$util.urlEncode($input.body)"
+        IntegrationResponses:
+          - StatusCode: 200
+            SelectionPattern: ""
+            ResponseTemplates:
+              application/json: |
+                #set($snsResponse = $util.parseJson($input.body))
+                {
+                  "status": #if($snsResponse.PublishResponse)"success"#else"error"#end,
+                  "snsRequest": {
+                    "TopicArn": "$context.integration.requestTemplates.get('TopicArn')",
+                    "Message": "$context.integration.requestTemplates.get('Message')"
+                  },
+                  "snsResponse": $input.json('$')
+                }
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: "Empty"
+
+  ApiGatewayRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: api-gateway-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: sns-publish
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref SNSTopic
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ApiMethod
+    Properties:
+      RestApiId: !Ref RestApi
+      StageName: prod
+      Description: !Sub "Dernier déploiement: ${AWS::StackName}-AWS::Timestam" # pour deployer automatiquement
+
+Outputs:
+  ApiEndpoint:
+    Description: URL de l'endpoint API
+    Value: !Sub 
+      - 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/sendmessage'
+      - {}
+  TopicArn:
+    Description: ARN du topic SNS
+    Value: !Ref SNSTopic
+  RoleArn:
+    Description: ARN du rôle IAM
+    Value: !GetAtt ApiGatewayRole.Arn
