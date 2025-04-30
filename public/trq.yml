@@ -16,10 +16,16 @@ Parameters:
     Default: "true"
     AllowedValues: ["true", "false"]
     Description: Enable API key
+  VerifyIpSource:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Enable IP source verification
 
 Conditions:
   ShouldEnableAuthorizer: !Equals [!Ref CustomAuthorizer, "true"]
   ShouldEnableAPIKey: !Equals [!Ref APIKey, "true"]
+  ShouldEnableVerifyIpSource: !Equals [!Ref VerifyIpSource, "true"]
 
 Resources:
   SNSTopic:
@@ -43,33 +49,65 @@ Resources:
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          VERIFY_IP_SOURCE: !Ref VerifyIpSource
       Code:
         ZipFile: |
           import json
           import logging
           import base64
+          import ipaddress
+          import os
           
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
           
-          def lambda_handler(event, context):
-              # Log l'événement complet
-              logger.info("Event reçu dans l'Authorizer: " + json.dumps(event))
-              
-              # Exemple de validation basique
-              auth_header = event['headers'].get('Authorization')
-              method_arn = event['methodArn']
+          def is_ip_in_range(ip, ip_range):
               try:
-                encoded = auth_header.split(' ')[1]
-                decoded = base64.b64decode(encoded).decode('utf-8')
-                username, password = decoded.split(':')
-                if username == "admin" and password == "admin":
-                  return _allow(method_arn,username)
-                else:
+                  return ipaddress.ip_address(ip) in ipaddress.ip_network(ip_range)
+              except ValueError:
+                  logger.error("IP invalide: %s ou plage invalide: %s", ip, ip_range)
+                  return False
+          
+          def lambda_handler(event, context):
+              logger.info("Event reçu dans l'Authorizer: %s", json.dumps(event))
+              
+              AZDO_IP_RANGES = [
+                  "20.37.158.0/23",
+                  "20.42.226.0/24",
+                  "52.228.82.0/24"
+              ]
+              
+              source_ip = event.get("headers", {}).get("X-Forwarded-For", "").split(",")[0].strip()
+              is_from_azdo = any(is_ip_in_range(source_ip, ip_range) for ip_range in AZDO_IP_RANGES)
+              
+              if os.environ.get("VERIFY_IP_SOURCE", "false").lower() == "true":
+                  if not is_from_azdo:
+                      logger.warning("IP non autorisée: %s", source_ip)
+                      return _deny(event["methodArn"])
+              
+              method_arn = event.get("methodArn")
+              auth_header = event.get("headers", {}).get("Authorization")
+              
+              if not auth_header:
+                  logger.warning("Pas d'en-tête d'autorisation")
                   return _deny(method_arn)
+                  
+              try:
+                  encoded = auth_header.split(" ")[1]
+                  decoded = base64.b64decode(encoded).decode("utf-8")
+                  username, password = decoded.split(":")
+                  
+                  if username == "admin" and password == "admin":
+                      return _allow(method_arn, username)
+                  else:
+                      logger.warning("Identifiants invalides")
+                      return _deny(method_arn)
+                      
               except Exception as e:
-                print(f"Erreur validation basique: {e}")
-                return _deny(method_arn)
+                  logger.error("Erreur validation basique: %s", str(e))
+                  return _deny(method_arn)
                  
           def _allow(method_arn,username):
             return {
@@ -123,7 +161,6 @@ Resources:
         - "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthorizerLambda.Arn}/invocations"
         - {}
 
-
   RestApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
@@ -148,6 +185,7 @@ Resources:
   ApiKey:
     Condition: ShouldEnableAPIKey
     Type: AWS::ApiGateway::ApiKey
+    DependsOn: ApiDeployment
     Properties:
       Name: !Sub "${AWS::StackName}-APIKey"
       StageKeys:
@@ -157,6 +195,7 @@ Resources:
   UsagePlan: 
     Condition: ShouldEnableAPIKey
     Type: AWS::ApiGateway::UsagePlan
+    DependsOn: ApiDeployment
     Properties:
       ApiStages:
         - ApiId: !Ref RestApi
@@ -242,11 +281,14 @@ Resources:
 
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
-    DependsOn: ApiMethod
+    DependsOn: 
+      - ApiMethod
+      - ApiResource
+      - ApiGatewayRole
     Properties:
       RestApiId: !Ref RestApi
+      Description: 'Deployment for Azure DevOps integration'
       StageName: prod
-      Description: !Sub "Dernier déploiement: ${AWS::StackName}-AWS::Timestam" # pour deployer automatiquement
 
 Outputs:
   ApiEndpoint:
