@@ -132,3 +132,113 @@ Une fois l'infrastructure CloudFormation déployée, suivez ces étapes pour con
 - [Azure DevOps IP Ranges](https://learn.microsoft.com/en-us/azure/devops/organizations/security/allow-list-ip-url)
 - [AWS API Gateway Security](https://docs.aws.amazon.com/apigateway/latest/developerguide/security.html)
 - [AWS SNS Security](https://docs.aws.amazon.com/sns/latest/dg/sns-security.html)
+
+## Production Best Practices 🏭
+
+### Gestion des Secrets 🔒
+
+1. **AWS Secrets Manager**
+   - Stocker les credentials (username/password) dans AWS Secrets Manager
+   - Utiliser une rotation automatique des secrets
+   - Configurer le Lambda Authorizer pour récupérer les credentials depuis Secrets Manager
+
+2. **API Keys**
+   - Implémenter une rotation régulière des API keys
+   - Utiliser des API keys différentes par environnement
+   - Mettre en place un système de révocation d'urgence
+
+### Sécurité Renforcée 🛡️
+
+1. **WAF (Web Application Firewall)**
+   - Ajouter AWS WAF devant l'API Gateway
+   - Configurer des règles contre les attaques communes
+   - Mettre en place une protection DDoS
+
+2. **Monitoring et Alerting**
+   - Configurer des alertes CloudWatch sur :
+     - Taux d'erreur anormal
+     - Latence élevée
+     - Tentatives d'accès non autorisées
+   - Mettre en place des dashboards de monitoring
+
+3. **Logging**
+   - Centraliser les logs dans CloudWatch Logs
+   - Configurer une rétention appropriée des logs
+   - Implémenter un système d'analyse des logs (Athena/OpenSearch)
+
+### Performance et Scalabilité 📈
+
+1. **Caching**
+   - Activer le cache API Gateway où approprié
+   - Optimiser les TTLs selon les besoins
+
+2. **Throttling**
+   - Configurer des limites de débit par API key
+   - Mettre en place une stratégie de burst
+
+3. **Monitoring des Performances**
+   - Tracer les temps de réponse
+   - Surveiller l'utilisation des ressources
+   - Configurer des tests de charge réguliers
+
+### High Availability 🌐
+
+1. **Multi-AZ**
+   - Déployer dans plusieurs zones de disponibilité
+   - Configurer une stratégie de failover
+
+2. **Backup et Disaster Recovery**
+   - Mettre en place des sauvegardes régulières des configurations
+   - Documenter et tester le plan de reprise d'activité
+
+### CI/CD et Déploiement 🚀
+
+1. **Environnements**
+   - Mettre en place des environnements distincts (dev, staging, prod)
+   - Utiliser des variables d'environnement appropriées
+
+2. **Tests Automatisés**
+   - Tests d'intégration
+   - Tests de charge
+   - Tests de sécurité
+
+3. **Déploiements**
+   - Implémenter des déploiements blue/green
+   - Mettre en place des rollbacks automatiques
+   - Utiliser des stratégies de canary release
+
+### Documentation et Maintenance 📚
+
+1. **API Documentation**
+   - Maintenir une documentation OpenAPI/Swagger
+   - Versionner l'API
+   - Documenter les changements breaking
+
+2. **Maintenance**
+   - Planifier des fenêtres de maintenance
+   - Automatiser les mises à jour de sécurité
+   - Maintenir un changelog
+
+### Coûts et Optimisation 💰
+
+1. **Monitoring des Coûts**
+   - Mettre en place des budgets AWS
+   - Configurer des alertes de dépassement
+   - Analyser régulièrement l'utilisation
+
+2. **Optimisation**
+   - Ajuster les ressources selon l'usage
+   - Optimiser les temps d'exécution Lambda
+   - Nettoyer les ressources inutilisées
+
+### Conformité et Audit 📋
+
+1. **Conformité**
+   - Implémenter la journalisation des accès
+   - Configurer AWS Config
+   - Maintenir une piste d'audit
+
+2. **Revues Régulières**
+   - Audits de sécurité périodiques
+   - Revues des accès IAM
+   - Évaluation des risques
